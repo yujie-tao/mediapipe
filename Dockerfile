@@ -34,6 +34,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libopencv-highgui-dev \
         libopencv-imgproc-dev \
         libopencv-video-dev \
+        mesa-common-dev\
+        libegl1-mesa-dev\
+        libgles2-mesa-dev\
         software-properties-common && \
     add-apt-repository -y ppa:openjdk-r/ppa && \
     apt-get update && apt-get install -y openjdk-8-jdk && \
@@ -54,6 +57,14 @@ azel-${BAZEL_VERSION}-installer-linux-x86_64.sh" && \
     rm -f /bazel/installer.sh
 
 COPY . /mediapipe/
+
+
+# Pre-built handtracking dektop (both CPU and GPU)
+RUN bazel build -c opt --define MEDIAPIPE_DISABLE_GPU=1 \
+    mediapipe/examples/desktop/hand_tracking:hand_tracking_cpu
+
+RUN bazel build -c opt --copt -DMESA_EGL_NO_X11_HEADERS \
+    mediapipe/examples/desktop/hand_tracking:hand_tracking_gpu
 
 # If we want the docker image to contain the pre-built object_detection_offline_demo binary, do the following
 # RUN bazel build -c opt --define MEDIAPIPE_DISABLE_GPU=1 mediapipe/examples/desktop/demo:object_detection_tensorflow_demo
