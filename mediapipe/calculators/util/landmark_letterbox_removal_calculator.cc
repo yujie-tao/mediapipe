@@ -116,8 +116,18 @@ class LandmarkLetterboxRemovalCalculator : public CalculatorBase {
       // Keep z-coord as is.
       new_landmark.set_z(landmark.z());
 
+      // Trying to printout input landmarks
+      LOG(INFO) << "hello landmoark";
+      LOG(INFO) << landmark.x();
+      LOG(INFO) << landmark.y();
+      LOG(INFO) << landmark.z();
+
       output_landmarks->emplace_back(new_landmark);
     }
+
+    // End of a frame of hand landmarks
+    LOG(INFO) << "end";
+
 
     cc->Outputs()
         .Tag(kLandmarksTag)

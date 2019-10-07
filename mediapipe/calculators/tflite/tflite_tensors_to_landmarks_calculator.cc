@@ -152,6 +152,7 @@ REGISTER_CALCULATOR(TfLiteTensorsToLandmarksCalculator);
       landmark.set_z(raw_landmarks[offset + 2]);
     }
     output_landmarks->push_back(landmark);
+
   }
 
   // Output normalized landmarks if required.
@@ -168,12 +169,23 @@ REGISTER_CALCULATOR(TfLiteTensorsToLandmarksCalculator);
 
       output_norm_landmarks->push_back(norm_landmark);
     }
+
+    // Trying to printout unnormalized landmoark
+    // LOG(INFO) << "hello normalized landmoark";
+    // LOG(INFO) << output_norm_landmarks;
+
     cc->Outputs()
         .Tag("NORM_LANDMARKS")
         .Add(output_norm_landmarks.release(), cc->InputTimestamp());
+
   }
   // Output absolute landmarks.
   if (cc->Outputs().HasTag("LANDMARKS")) {
+
+    // Trying to printout unnormalized landmoark
+    // LOG(INFO) << "hello unnormalized landmoark";
+    // LOG(INFO) << output_landmarks;
+
     cc->Outputs()
         .Tag("LANDMARKS")
         .Add(output_landmarks.release(), cc->InputTimestamp());
