@@ -28,6 +28,8 @@
 
 #include <cmath>
 #include <vector>
+#include <iomanip>
+#include <sstream>
 
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/landmark.pb.h"
@@ -106,6 +108,10 @@ class LandmarkLetterboxRemovalCalculator : public CalculatorBase {
 
     auto output_landmarks =
         absl::make_unique<std::vector<NormalizedLandmark>>();
+
+    // LOG(INFO) << input_landmarks.str();
+
+
     for (const auto& landmark : input_landmarks) {
       NormalizedLandmark new_landmark;
       const float new_x = (landmark.x() - left) / (1.0f - left_and_right);
@@ -117,16 +123,20 @@ class LandmarkLetterboxRemovalCalculator : public CalculatorBase {
       new_landmark.set_z(landmark.z());
 
       // Trying to printout input landmarks
-      LOG(INFO) << "hello landmoark";
-      LOG(INFO) << landmark.x();
-      LOG(INFO) << landmark.y();
-      LOG(INFO) << landmark.z();
+      // LOG(INFO) << "hello landmark";
+      // std::stringstream x,y;
+      // x << landmark.x();
+      // y << landmark.y();
+      // LOG(INFO) << x.str()+','+y.str();
+      // LOG(INFO) << landmark.x();
+      // LOG(INFO) << landmark.y();
+      // LOG(INFO) << landmark.z();
 
       output_landmarks->emplace_back(new_landmark);
     }
 
     // End of a frame of hand landmarks
-    LOG(INFO) << "end";
+    // LOG(INFO) << "end";
 
 
     cc->Outputs()

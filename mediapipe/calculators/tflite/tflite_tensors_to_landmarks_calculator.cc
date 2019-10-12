@@ -185,6 +185,10 @@ REGISTER_CALCULATOR(TfLiteTensorsToLandmarksCalculator);
     // Trying to printout unnormalized landmoark
     // LOG(INFO) << "hello unnormalized landmoark";
     // LOG(INFO) << output_landmarks;
+    // LOG(INFO) << "hello landmark";
+    // LOG(INFO) << output_landmarks.x();
+    // LOG(INFO) << output_landmarks.y();
+    // LOG(INFO) << output_landmarks.z();
 
     cc->Outputs()
         .Tag("LANDMARKS")

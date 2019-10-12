@@ -127,6 +127,14 @@ node {
   output_stream: "LANDMARKS:scaled_landmarks"
 }
 
+
+# Call custom calculator to get landmarks
+node {
+  calculator: "LandmarksToPlotCalculator"
+  input_stream: "LANDMARKS:landmarks"
+  output_stream: "LANDMARKS:landmarks"
+}
+
 # Projects the landmarks from the cropped hand image to the corresponding
 # locations on the full image before cropping (input to the graph).
 node {
