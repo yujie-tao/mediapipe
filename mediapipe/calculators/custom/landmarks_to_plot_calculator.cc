@@ -2,6 +2,8 @@
 #include <vector>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
+#include <iostream>
 
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/landmark.pb.h"
@@ -71,8 +73,13 @@ class LandmarksToPlotCalculator : public CalculatorBase {
     auto output_landmarks =
         absl::make_unique<std::vector<NormalizedLandmark>>();
 
+    std::ofstream myfile;
 
-    LOG(INFO) << "hello landmark";
+    myfile.open ("test.txt", std::fstream::app);
+    myfile << "Hello Landmark. \n";
+    myfile.close();
+
+    // LOG(INFO) << "hello landmark";
     for (const auto& landmark : input_landmarks) {
       NormalizedLandmark new_landmark;
       const float new_x = landmark.x();
@@ -86,13 +93,24 @@ class LandmarksToPlotCalculator : public CalculatorBase {
       y << landmark.y();
       LOG(INFO) << x.str()+','+y.str();
 
+
+      myfile.open ("test.txt", std::fstream::app);
+      myfile << x.str()+','+y.str()+ "\n";
+      myfile.close();
+
+
       // output_landmarks->emplace_back(input_landmarks);
 
     }
 
-    // End of a frame of hand landmarks
-    LOG(INFO) << "end";
+    // writeFile();
 
+    // End of a frame of hand landmarks
+    // LOG(INFO) << "end";
+
+    myfile.open ("test.txt", std::fstream::app);
+    myfile << "Bye Landmark \n";
+    myfile.close();
 
     cc->Outputs()
         .Tag(kLandmarksTag)
@@ -100,6 +118,18 @@ class LandmarksToPlotCalculator : public CalculatorBase {
     return ::mediapipe::OkStatus();
   }
 };
+
+// int writeFile() {
+//   std::ofstream myfile;
+//   myfile.open ("test.txt");
+//   myfile << "Writing this to a file.\n";
+//   myfile << "Writing this to a file.\n";
+//   myfile << "Writing this to a file.\n";
+//   myfile << "Writing this to a file.\n";
+//   myfile.close();
+//   return 0;
+// }
+
 
 REGISTER_CALCULATOR(LandmarksToPlotCalculator);
 
