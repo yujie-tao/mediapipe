@@ -46,8 +46,6 @@ class LandmarksToPlotCalculator : public CalculatorBase {
         << "Missing one or more input streams.";
 
     cc->Inputs().Tag(kLandmarksTag).Set<std::vector<NormalizedLandmark>>();
-    // cc->Inputs().Tag(kLetterboxPaddingTag).Set<std::array<float, 4>>();
-
     cc->Outputs().Tag(kLandmarksTag).Set<std::vector<NormalizedLandmark>>();
 
 
@@ -79,7 +77,6 @@ class LandmarksToPlotCalculator : public CalculatorBase {
     myfile << "Hello Landmark. \n";
     myfile.close();
 
-    // LOG(INFO) << "hello landmark";
     for (const auto& landmark : input_landmarks) {
       NormalizedLandmark new_landmark;
       const float new_x = landmark.x();
@@ -91,7 +88,7 @@ class LandmarksToPlotCalculator : public CalculatorBase {
       std::stringstream x,y;
       x << landmark.x();
       y << landmark.y();
-      LOG(INFO) << x.str()+','+y.str();
+      // LOG(INFO) << x.str()+','+y.str();
 
 
       myfile.open ("test.txt", std::fstream::app);
@@ -103,10 +100,7 @@ class LandmarksToPlotCalculator : public CalculatorBase {
 
     }
 
-    // writeFile();
 
-    // End of a frame of hand landmarks
-    // LOG(INFO) << "end";
 
     myfile.open ("test.txt", std::fstream::app);
     myfile << "Bye Landmark \n";
@@ -118,17 +112,6 @@ class LandmarksToPlotCalculator : public CalculatorBase {
     return ::mediapipe::OkStatus();
   }
 };
-
-// int writeFile() {
-//   std::ofstream myfile;
-//   myfile.open ("test.txt");
-//   myfile << "Writing this to a file.\n";
-//   myfile << "Writing this to a file.\n";
-//   myfile << "Writing this to a file.\n";
-//   myfile << "Writing this to a file.\n";
-//   myfile.close();
-//   return 0;
-// }
 
 
 REGISTER_CALCULATOR(LandmarksToPlotCalculator);
