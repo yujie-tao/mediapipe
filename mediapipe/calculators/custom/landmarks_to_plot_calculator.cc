@@ -12,7 +12,7 @@ namespace mediapipe {
 namespace {
 
 constexpr char kLandmarksTag[] = "LANDMARKS";
-constexpr char kLetterboxPaddingTag[] = "LETTERBOX_PADDING";
+// constexpr char kLetterboxPaddingTag[] = "OUTPUT_LANDMARKS";
 
 }  // namespace
 
@@ -40,12 +40,11 @@ constexpr char kLetterboxPaddingTag[] = "LETTERBOX_PADDING";
 class LandmarksToPlotCalculator : public CalculatorBase {
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(cc->Inputs().HasTag(kLandmarksTag) &&
-              cc->Inputs().HasTag(kLetterboxPaddingTag))
+    RET_CHECK(cc->Inputs().HasTag(kLandmarksTag))
         << "Missing one or more input streams.";
 
     cc->Inputs().Tag(kLandmarksTag).Set<std::vector<NormalizedLandmark>>();
-    cc->Inputs().Tag(kLetterboxPaddingTag).Set<std::array<float, 4>>();
+    // cc->Inputs().Tag(kLetterboxPaddingTag).Set<std::array<float, 4>>();
 
     cc->Outputs().Tag(kLandmarksTag).Set<std::vector<NormalizedLandmark>>();
 
@@ -75,6 +74,11 @@ class LandmarksToPlotCalculator : public CalculatorBase {
 
     LOG(INFO) << "hello landmark";
     for (const auto& landmark : input_landmarks) {
+      NormalizedLandmark new_landmark;
+      const float new_x = landmark.x();
+      const float new_y = landmark.y();
+
+      output_landmarks -> emplace_back(new_landmark);
 
       // Trying to printout input landmarks
       std::stringstream x,y;
@@ -82,7 +86,7 @@ class LandmarksToPlotCalculator : public CalculatorBase {
       y << landmark.y();
       LOG(INFO) << x.str()+','+y.str();
 
-      output_landmarks->emplace_back(input_landmarks);
+      // output_landmarks->emplace_back(input_landmarks);
 
     }
 
