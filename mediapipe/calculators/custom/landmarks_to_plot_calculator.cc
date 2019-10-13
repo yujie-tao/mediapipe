@@ -72,9 +72,9 @@ class LandmarksToPlotCalculator : public CalculatorBase {
         absl::make_unique<std::vector<NormalizedLandmark>>();
 
     std::ofstream myfile;
+    std::string file_name = "stone.txt";
 
-    myfile.open ("test.txt", std::fstream::app);
-    myfile << "Hello Landmark. \n";
+    myfile.open (file_name, std::fstream::app);
     myfile.close();
 
     for (const auto& landmark : input_landmarks) {
@@ -88,13 +88,11 @@ class LandmarksToPlotCalculator : public CalculatorBase {
       std::stringstream x,y;
       x << landmark.x();
       y << landmark.y();
-      // LOG(INFO) << x.str()+','+y.str();
 
 
-      myfile.open ("test.txt", std::fstream::app);
+      myfile.open (file_name, std::fstream::app);
       myfile << x.str()+','+y.str()+ "\n";
       myfile.close();
-
 
       // output_landmarks->emplace_back(input_landmarks);
 
@@ -102,8 +100,8 @@ class LandmarksToPlotCalculator : public CalculatorBase {
 
 
 
-    myfile.open ("test.txt", std::fstream::app);
-    myfile << "Bye Landmark \n";
+    myfile.open (file_name, std::fstream::app);
+    myfile << "end \n";
     myfile.close();
 
     cc->Outputs()
