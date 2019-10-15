@@ -72,7 +72,7 @@ class LandmarksToPlotCalculator : public CalculatorBase {
         absl::make_unique<std::vector<NormalizedLandmark>>();
 
     std::ofstream myfile;
-    std::string file_name = "stone.txt";
+    std::string file_name = "test.txt";
 
     myfile.open (file_name, std::fstream::app);
     myfile.close();
