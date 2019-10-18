@@ -18,7 +18,7 @@ package mediapipe;
 
 import "mediapipe/framework/calculator.proto";
 
-message LandmarksToPlotCalculator {
+message ExportLandmarksCalculator{
   extend CalculatorOptions {
     optional LandmarksToPlotCalculator ext = 260199669;
   }

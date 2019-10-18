@@ -5,8 +5,8 @@ package(default_visibility = ["//visibility:private"])
 load("//mediapipe/framework/port:build_config.bzl", "mediapipe_cc_proto_library")
 
 cc_library(
-    name = "landmarks_to_plot_calculator",
-    srcs = ["landmarks_to_plot_calculator.cc"],
+    name = "export_landmarks_calculator",
+    srcs = ["export_landmarks_calculator.cc"],
     visibility = ["//visibility:public"],
     deps = [
     	"//mediapipe/framework:calculator_framework",

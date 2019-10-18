@@ -39,7 +39,7 @@ constexpr char kLandmarksTag[] = "LANDMARKS";
 //   output_stream: "LANDMARKS:adjusted_landmarks"
 // }
 
-class LandmarksToPlotCalculator : public CalculatorBase {
+class ExportLandmarksCalculator : public CalculatorBase {
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
     RET_CHECK(cc->Inputs().HasTag(kLandmarksTag))
@@ -72,7 +72,7 @@ class LandmarksToPlotCalculator : public CalculatorBase {
         absl::make_unique<std::vector<NormalizedLandmark>>();
 
     std::ofstream myfile;
-    std::string file_name = "test.txt";
+    std::string file_name = "./data/test.txt";
 
     myfile.open (file_name, std::fstream::app);
     myfile.close();
@@ -112,6 +112,6 @@ class LandmarksToPlotCalculator : public CalculatorBase {
 };
 
 
-REGISTER_CALCULATOR(LandmarksToPlotCalculator);
+REGISTER_CALCULATOR(ExportLandmarksCalculator);
 
 }  // namespace mediapipe

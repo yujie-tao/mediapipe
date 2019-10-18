@@ -129,7 +129,7 @@ node {
 
 # Try custom calculator
 node {
-  calculator: "LandmarksToPlotCalculator"
+  calculator: "ExportLandmarksCalculator"
   input_stream: "LANDMARKS:landmarks"
   output_stream: "LANDMARKS:output_landmakr"
 }
