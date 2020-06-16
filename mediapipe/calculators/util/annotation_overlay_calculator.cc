@@ -14,6 +14,7 @@
 
 #include <memory>
 
+#include "absl/strings/str_cat.h"
 #include "mediapipe/calculators/util/annotation_overlay_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_options.pb.h"
@@ -26,6 +27,7 @@
 #include "mediapipe/framework/port/vector.h"
 #include "mediapipe/util/annotation_renderer.h"
 #include "mediapipe/util/color.pb.h"
+#include "mediapipe/util/render_data.pb.h"
 
 #if !defined(MEDIAPIPE_DISABLE_GPU)
 #include "mediapipe/gpu/gl_calculator_helper.h"
@@ -38,11 +40,13 @@ namespace mediapipe {
 
 namespace {
 
-constexpr char kInputFrameTag[] = "INPUT_FRAME";
-constexpr char kOutputFrameTag[] = "OUTPUT_FRAME";
+constexpr char kInputFrameTag[] = "IMAGE";
+constexpr char kOutputFrameTag[] = "IMAGE";
 
-constexpr char kInputFrameTagGpu[] = "INPUT_FRAME_GPU";
-constexpr char kOutputFrameTagGpu[] = "OUTPUT_FRAME_GPU";
+constexpr char kInputVectorTag[] = "VECTOR";
+
+constexpr char kInputFrameTagGpu[] = "IMAGE_GPU";
+constexpr char kOutputFrameTagGpu[] = "IMAGE_GPU";
 
 enum { ATTRIB_VERTEX, ATTRIB_TEXTURE_POSITION, NUM_ATTRIBUTES };
 
@@ -52,22 +56,25 @@ size_t RoundUp(size_t n, size_t m) { return ((n + m - 1) / m) * m; }  // NOLINT
 // When using GPU, this color will become transparent when the calculator
 // merges the annotation overlay with the image frame. As a result, drawing in
 // this color is not supported and it should be set to something unlikely used.
-constexpr int kAnnotationBackgroundColor[] = {100, 101, 102};
+constexpr uchar kAnnotationBackgroundColor = 2;  // Grayscale value.
 }  // namespace
 
 // A calculator for rendering data on images.
 //
 // Inputs:
-//  1. INPUT_FRAME or INPUT_FRAME_GPU (optional): An ImageFrame (or GpuBuffer)
+//  1. IMAGE or IMAGE_GPU (optional): An ImageFrame (or GpuBuffer)
 //     containing the input image.
 //     If output is CPU, and input isn't provided, the renderer creates a
 //     blank canvas with the width, height and color provided in the options.
 //  2. RenderData proto on variable number of input streams. All the RenderData
 //     at a particular timestamp is drawn on the image in the order of their
 //     input streams. No tags required.
+//  3. std::vector<RenderData> on variable number of input streams. RenderData
+//     objects at a particular timestamp are drawn on the image in order of the
+//     input vector items. These input streams are tagged with "VECTOR".
 //
 // Output:
-//  1. OUTPUT_FRAME or OUTPUT_FRAME_GPU: A rendered ImageFrame (or GpuBuffer).
+//  1. IMAGE or IMAGE_GPU: A rendered ImageFrame (or GpuBuffer).
 //
 // For CPU input frames, only SRGBA, SRGB and GRAY8 format are supported. The
 // output format is the same as input except for GRAY8 where the output is in
@@ -81,11 +88,13 @@ constexpr int kAnnotationBackgroundColor[] = {100, 101, 102};
 // Example config (CPU):
 // node {
 //   calculator: "AnnotationOverlayCalculator"
-//   input_stream: "INPUT_FRAME:image_frames"
+//   input_stream: "IMAGE:image_frames"
 //   input_stream: "render_data_1"
 //   input_stream: "render_data_2"
 //   input_stream: "render_data_3"
-//   output_stream: "OUTPUT_FRAME:decorated_frames"
+//   input_stream: "VECTOR:0:render_data_vec_0"
+//   input_stream: "VECTOR:1:render_data_vec_1"
+//   output_stream: "IMAGE:decorated_frames"
 //   options {
 //     [mediapipe.AnnotationOverlayCalculatorOptions.ext] {
 //     }
@@ -95,11 +104,13 @@ constexpr int kAnnotationBackgroundColor[] = {100, 101, 102};
 // Example config (GPU):
 // node {
 //   calculator: "AnnotationOverlayCalculator"
-//   input_stream: "INPUT_FRAME_GPU:image_frames"
+//   input_stream: "IMAGE_GPU:image_frames"
 //   input_stream: "render_data_1"
 //   input_stream: "render_data_2"
 //   input_stream: "render_data_3"
-//   output_stream: "OUTPUT_FRAME_GPU:decorated_frames"
+//   input_stream: "VECTOR:0:render_data_vec_0"
+//   input_stream: "VECTOR:1:render_data_vec_1"
+//   output_stream: "IMAGE_GPU:decorated_frames"
 //   options {
 //     [mediapipe.AnnotationOverlayCalculatorOptions.ext] {
 //     }
@@ -138,9 +149,6 @@ class AnnotationOverlayCalculator : public CalculatorBase {
   // Underlying helper renderer library.
   std::unique_ptr<AnnotationRenderer> renderer_;
 
-  // Number of input streams with render data.
-  int num_render_streams_;
-
   // Indicates if image frame is available as input.
   bool image_frame_available_ = false;
 
@@ -171,25 +179,28 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
     return ::mediapipe::InternalError("GPU output must have GPU input.");
   }
 
-  // Assume all inputs are render streams; adjust below.
-  int num_render_streams = cc->Inputs().NumEntries();
-
   // Input image to render onto copy of.
 #if !defined(MEDIAPIPE_DISABLE_GPU)
   if (cc->Inputs().HasTag(kInputFrameTagGpu)) {
     cc->Inputs().Tag(kInputFrameTagGpu).Set<mediapipe::GpuBuffer>();
-    num_render_streams = cc->Inputs().NumEntries() - 1;
     use_gpu |= true;
   }
 #endif  //  !MEDIAPIPE_DISABLE_GPU
   if (cc->Inputs().HasTag(kInputFrameTag)) {
     cc->Inputs().Tag(kInputFrameTag).Set<ImageFrame>();
-    num_render_streams = cc->Inputs().NumEntries() - 1;
   }
 
   // Data streams to render.
-  for (int i = 0; i < num_render_streams; ++i) {
-    cc->Inputs().Index(i).Set<RenderData>();
+  for (CollectionItemId id = cc->Inputs().BeginId(); id < cc->Inputs().EndId();
+       ++id) {
+    auto tag_and_index = cc->Inputs().TagAndIndexFromId(id);
+    std::string tag = tag_and_index.first;
+    if (tag == kInputVectorTag) {
+      cc->Inputs().Get(id).Set<std::vector<RenderData>>();
+    } else if (tag.empty()) {
+      // Empty tag defaults to accepting a single object of RenderData type.
+      cc->Inputs().Get(id).Set<RenderData>();
+    }
   }
 
   // Rendered image.
@@ -228,12 +239,10 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
   if (cc->Inputs().HasTag(kInputFrameTagGpu) ||
       cc->Inputs().HasTag(kInputFrameTag)) {
     image_frame_available_ = true;
-    num_render_streams_ = cc->Inputs().NumEntries() - 1;
   } else {
     image_frame_available_ = false;
     RET_CHECK(options_.has_canvas_width_px());
     RET_CHECK(options_.has_canvas_height_px());
-    num_render_streams_ = cc->Inputs().NumEntries();
   }
 
   // Initialize the helper renderer library.
@@ -285,12 +294,28 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
   renderer_->AdoptImage(image_mat.get());
 
   // Render streams onto render target.
-  for (int i = 0; i < num_render_streams_; ++i) {
-    if (cc->Inputs().Index(i).IsEmpty()) {
+  for (CollectionItemId id = cc->Inputs().BeginId(); id < cc->Inputs().EndId();
+       ++id) {
+    auto tag_and_index = cc->Inputs().TagAndIndexFromId(id);
+    std::string tag = tag_and_index.first;
+    if (!tag.empty() && tag != kInputVectorTag) {
       continue;
     }
-    const RenderData& render_data = cc->Inputs().Index(i).Get<RenderData>();
-    renderer_->RenderDataOnImage(render_data);
+    if (cc->Inputs().Get(id).IsEmpty()) {
+      continue;
+    }
+    if (tag.empty()) {
+      // Empty tag defaults to accepting a single object of RenderData type.
+      const RenderData& render_data = cc->Inputs().Get(id).Get<RenderData>();
+      renderer_->RenderDataOnImage(render_data);
+    } else {
+      RET_CHECK_EQ(kInputVectorTag, tag);
+      const std::vector<RenderData>& render_data_vec =
+          cc->Inputs().Get(id).Get<std::vector<RenderData>>();
+      for (const RenderData& render_data : render_data_vec) {
+        renderer_->RenderDataOnImage(render_data);
+      }
+    }
   }
 
   if (use_gpu_) {
@@ -467,11 +492,9 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
     if (format != mediapipe::ImageFormat::SRGBA &&
         format != mediapipe::ImageFormat::SRGB)
       RET_CHECK_FAIL() << "Unsupported GPU input format: " << format;
-
-    image_mat = absl::make_unique<cv::Mat>(
-        height_, width_, CV_8UC3,
-        cv::Scalar(kAnnotationBackgroundColor[0], kAnnotationBackgroundColor[1],
-                   kAnnotationBackgroundColor[2]));
+    image_mat = absl::make_unique<cv::Mat>(height_, width_, CV_8UC3);
+    memset(image_mat->data, kAnnotationBackgroundColor,
+           height_ * width_ * image_mat->elemSize());
   } else {
     image_mat = absl::make_unique<cv::Mat>(
         options_.canvas_height_px(), options_.canvas_width_px(), CV_8UC3,
@@ -551,31 +574,33 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
   };
 
   // Shader to overlay a texture onto another when overlay is non-zero.
-  const GLchar* frag_src = GLES_VERSION_COMPAT
-      R"(
-  #if __VERSION__ < 130
-    #define in varying
-  #endif  // __VERSION__ < 130
-
+  constexpr char kFragSrcBody[] = R"(
+  DEFAULT_PRECISION(mediump, float)
   #ifdef GL_ES
     #define fragColor gl_FragColor
-    precision highp float;
   #else
-    #define lowp
-    #define mediump
-    #define highp
-    #define texture2D texture
     out vec4 fragColor;
-  #endif  // defined(GL_ES)
+  #endif  // GL_ES
 
     in vec2 sample_coordinate;
     uniform sampler2D input_frame;
+    // "overlay" texture has top-left origin (OpenCV mat with annotations has
+    // been uploaded to GPU without vertical flip)
     uniform sampler2D overlay;
     uniform vec3 transparent_color;
 
     void main() {
       vec3 image_pix = texture2D(input_frame, sample_coordinate).rgb;
+  #ifdef INPUT_FRAME_HAS_TOP_LEFT_ORIGIN
+      // "input_frame" has top-left origin same as "overlay", hence overlaying
+      // as is.
       vec3 overlay_pix = texture2D(overlay, sample_coordinate).rgb;
+  #else
+      // "input_frame" has bottom-left origin, hence flipping "overlay" texture
+      // coordinates.
+      vec3 overlay_pix = texture2D(overlay, vec2(sample_coordinate.x, 1.0 - sample_coordinate.y)).rgb;
+  #endif  // INPUT_FRAME_HAS_TOP_LEFT_ORIGIN
+
       vec3 out_pix = image_pix;
       float dist = distance(overlay_pix.rgb, transparent_color);
       if (dist > 0.001) out_pix = overlay_pix;
@@ -584,8 +609,18 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
     }
   )";
 
+  std::string defines;
+  if (options_.gpu_uses_top_left_origin()) {
+    defines = R"(
+      #define INPUT_FRAME_HAS_TOP_LEFT_ORIGIN;
+    )";
+  }
+
+  const std::string frag_src = absl::StrCat(
+      mediapipe::kMediaPipeFragmentShaderPreamble, defines, kFragSrcBody);
+
   // Create shader program and set parameters
-  mediapipe::GlhCreateProgram(mediapipe::kBasicVertexShader, frag_src,
+  mediapipe::GlhCreateProgram(mediapipe::kBasicVertexShader, frag_src.c_str(),
                               NUM_ATTRIBUTES, (const GLchar**)&attr_name[0],
                               attr_location, &program_);
   RET_CHECK(program_) << "Problem initializing the program.";
@@ -593,9 +628,9 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
   glUniform1i(glGetUniformLocation(program_, "input_frame"), 1);
   glUniform1i(glGetUniformLocation(program_, "overlay"), 2);
   glUniform3f(glGetUniformLocation(program_, "transparent_color"),
-              kAnnotationBackgroundColor[0] / 255.0,
-              kAnnotationBackgroundColor[1] / 255.0,
-              kAnnotationBackgroundColor[2] / 255.0);
+              kAnnotationBackgroundColor / 255.0,
+              kAnnotationBackgroundColor / 255.0,
+              kAnnotationBackgroundColor / 255.0);
 
   // Init texture for opencv rendered frame.
   const auto& input_frame =

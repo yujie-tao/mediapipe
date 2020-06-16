@@ -159,6 +159,8 @@ import functools
 import numpy as np
 from mediapipe.util.sequence import media_sequence_util as msu
 
+_HAS_DYNAMIC_ATTRIBUTES = True
+
 ##################################  METADATA  #################################
 # A unique identifier for each example.
 EXAMPLE_ID_KEY = "example/id"
@@ -284,7 +286,7 @@ REGION_TRACK_CONFIDENCE_KEY = "region/track/confidence"
 # have overlapping track ids.
 REGION_CLASS_INDEX_KEY = "region/class/index"
 REGION_CLASS_STRING_KEY = "region/class/string"
-REGION_CLASS_CONFIDENCE_KEY = "region/class/confidencee"
+REGION_CLASS_CONFIDENCE_KEY = "region/class/confidence"
 # The timestamp of the region annotation in microseconds.
 REGION_TIMESTAMP_KEY = "region/timestamp"
 # The original timestamp in microseconds for region annotations.
@@ -489,7 +491,9 @@ def _create_image_with_prefix(name, prefix):
                                    prefix=prefix, module_dict=globals())
   msu.create_int_feature_list(name + "_timestamp", IMAGE_TIMESTAMP_KEY,
                               prefix=prefix, module_dict=globals())
-
+  msu.create_bytes_list_feature_list(name + "_multi_encoded",
+                                     IMAGE_MULTI_ENCODED_KEY, prefix=prefix,
+                                     module_dict=globals())
 FORWARD_FLOW_PREFIX = "FORWARD_FLOW"
 CLASS_SEGMENTATION_PREFIX = "CLASS_SEGMENTATION"
 INSTANCE_SEGMENTATION_PREFIX = "INSTANCE_SEGMENTATION"

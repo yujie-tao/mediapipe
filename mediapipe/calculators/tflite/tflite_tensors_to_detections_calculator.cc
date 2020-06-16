@@ -27,7 +27,7 @@
 #include "mediapipe/framework/port/ret_check.h"
 #include "tensorflow/lite/interpreter.h"
 
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
 #include "mediapipe/gpu/gl_calculator_helper.h"
 #include "tensorflow/lite/delegates/gpu/gl/gl_buffer.h"
 #include "tensorflow/lite/delegates/gpu/gl/gl_program.h"
@@ -35,7 +35,7 @@
 #include "tensorflow/lite/delegates/gpu/gl_delegate.h"
 #endif  // !MEDIAPIPE_DISABLE_GPU
 
-#if defined(__APPLE__) && !TARGET_OS_OSX  // iOS
+#if defined(MEDIAPIPE_IOS)
 #import <CoreVideo/CoreVideo.h>
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
@@ -47,30 +47,31 @@
 #endif  // iOS
 
 namespace {
-
 constexpr int kNumInputTensorsWithAnchors = 3;
 constexpr int kNumCoordsPerBox = 4;
 
+constexpr char kTensorsTag[] = "TENSORS";
+constexpr char kTensorsGpuTag[] = "TENSORS_GPU";
 }  // namespace
 
 namespace mediapipe {
 
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
 using ::tflite::gpu::gl::CreateReadWriteShaderStorageBuffer;
 using ::tflite::gpu::gl::GlShader;
 #endif
 
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
 typedef ::tflite::gpu::gl::GlBuffer GpuTensor;
 typedef ::tflite::gpu::gl::GlProgram GpuProgram;
-#elif defined(__APPLE__) && !TARGET_OS_OSX  // iOS
+#elif defined(MEDIAPIPE_IOS)
 typedef id<MTLBuffer> GpuTensor;
 typedef id<MTLComputePipelineState> GpuProgram;
 #endif
 
 namespace {
 
-#if !defined(MEDIAPIPE_DISABLE_GPU)
+#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__EMSCRIPTEN__)
 struct GPUData {
   GpuProgram decode_program;
   GpuProgram score_program;
@@ -99,7 +100,7 @@ void ConvertAnchorsToRawValues(const std::vector<Anchor>& anchors,
                                int num_boxes, float* raw_anchors) {
   CHECK_EQ(anchors.size(), num_boxes);
   int box = 0;
-  for (auto anchor : anchors) {
+  for (const auto& anchor : anchors) {
     raw_anchors[box * kNumCoordsPerBox + 0] = anchor.y_center();
     raw_anchors[box * kNumCoordsPerBox + 1] = anchor.x_center();
     raw_anchors[box * kNumCoordsPerBox + 2] = anchor.h();
@@ -180,10 +181,10 @@ class TfLiteTensorsToDetectionsCalculator : public CalculatorBase {
   std::vector<Anchor> anchors_;
   bool side_packet_anchors_{};
 
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
   mediapipe::GlCalculatorHelper gpu_helper_;
   std::unique_ptr<GPUData> gpu_data_;
-#elif defined(__APPLE__) && !TARGET_OS_OSX  // iOS
+#elif defined(MEDIAPIPE_IOS)
   MPPMetalHelper* gpu_helper_ = nullptr;
   std::unique_ptr<GPUData> gpu_data_;
 #endif
@@ -200,13 +201,13 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
 
   bool use_gpu = false;
 
-  if (cc->Inputs().HasTag("TENSORS")) {
-    cc->Inputs().Tag("TENSORS").Set<std::vector<TfLiteTensor>>();
+  if (cc->Inputs().HasTag(kTensorsTag)) {
+    cc->Inputs().Tag(kTensorsTag).Set<std::vector<TfLiteTensor>>();
   }
 
-#if !defined(MEDIAPIPE_DISABLE_GPU)
-  if (cc->Inputs().HasTag("TENSORS_GPU")) {
-    cc->Inputs().Tag("TENSORS_GPU").Set<std::vector<GpuTensor>>();
+#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__EMSCRIPTEN__)
+  if (cc->Inputs().HasTag(kTensorsGpuTag)) {
+    cc->Inputs().Tag(kTensorsGpuTag).Set<std::vector<GpuTensor>>();
     use_gpu |= true;
   }
 #endif  //  !MEDIAPIPE_DISABLE_GPU
@@ -222,9 +223,9 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
   }
 
   if (use_gpu) {
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
     MP_RETURN_IF_ERROR(mediapipe::GlCalculatorHelper::UpdateContract(cc));
-#elif defined(__APPLE__) && !TARGET_OS_OSX  // iOS
+#elif defined(MEDIAPIPE_IOS)
     MP_RETURN_IF_ERROR([MPPMetalHelper updateContract:cc]);
 #endif
   }
@@ -236,11 +237,11 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
     CalculatorContext* cc) {
   cc->SetOffset(TimestampDiff(0));
 
-  if (cc->Inputs().HasTag("TENSORS_GPU")) {
+  if (cc->Inputs().HasTag(kTensorsGpuTag)) {
     gpu_input_ = true;
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
     MP_RETURN_IF_ERROR(gpu_helper_.Open(cc));
-#elif defined(__APPLE__) && !TARGET_OS_OSX  // iOS
+#elif defined(MEDIAPIPE_IOS)
     gpu_helper_ = [[MPPMetalHelper alloc] initWithCalculatorContext:cc];
     RET_CHECK(gpu_helper_);
 #endif
@@ -258,8 +259,8 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
 
 ::mediapipe::Status TfLiteTensorsToDetectionsCalculator::Process(
     CalculatorContext* cc) {
-  if ((!gpu_input_ && cc->Inputs().Tag("TENSORS").IsEmpty()) ||
-      (gpu_input_ && cc->Inputs().Tag("TENSORS_GPU").IsEmpty())) {
+  if ((!gpu_input_ && cc->Inputs().Tag(kTensorsTag).IsEmpty()) ||
+      (gpu_input_ && cc->Inputs().Tag(kTensorsGpuTag).IsEmpty())) {
     return ::mediapipe::OkStatus();
   }
 
@@ -284,7 +285,7 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
 ::mediapipe::Status TfLiteTensorsToDetectionsCalculator::ProcessCPU(
     CalculatorContext* cc, std::vector<Detection>* output_detections) {
   const auto& input_tensors =
-      cc->Inputs().Tag("TENSORS").Get<std::vector<TfLiteTensor>>();
+      cc->Inputs().Tag(kTensorsTag).Get<std::vector<TfLiteTensor>>();
 
   if (input_tensors.size() == 2 ||
       input_tensors.size() == kNumInputTensorsWithAnchors) {
@@ -400,9 +401,9 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
 }
 ::mediapipe::Status TfLiteTensorsToDetectionsCalculator::ProcessGPU(
     CalculatorContext* cc, std::vector<Detection>* output_detections) {
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
   const auto& input_tensors =
-      cc->Inputs().Tag("TENSORS_GPU").Get<std::vector<GpuTensor>>();
+      cc->Inputs().Tag(kTensorsGpuTag).Get<std::vector<GpuTensor>>();
   RET_CHECK_GE(input_tensors.size(), 2);
 
   MP_RETURN_IF_ERROR(gpu_helper_.RunInGlContext([this, &input_tensors, &cc,
@@ -463,20 +464,20 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
 
     return ::mediapipe::OkStatus();
   }));
-#elif defined(__APPLE__) && !TARGET_OS_OSX  // iOS
+#elif defined(MEDIAPIPE_IOS)
 
   const auto& input_tensors =
-      cc->Inputs().Tag("TENSORS_GPU").Get<std::vector<GpuTensor>>();
+      cc->Inputs().Tag(kTensorsGpuTag).Get<std::vector<GpuTensor>>();
   RET_CHECK_GE(input_tensors.size(), 2);
 
   // Copy inputs.
   [MPPMetalUtil blitMetalBufferTo:gpu_data_->raw_boxes_buffer
                              from:input_tensors[0]
-                         blocking:true
+                         blocking:false
                     commandBuffer:[gpu_helper_ commandBuffer]];
   [MPPMetalUtil blitMetalBufferTo:gpu_data_->raw_scores_buffer
                              from:input_tensors[1]
-                         blocking:true
+                         blocking:false
                     commandBuffer:[gpu_helper_ commandBuffer]];
   if (!anchors_init_) {
     if (side_packet_anchors_) {
@@ -491,48 +492,37 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
       RET_CHECK_EQ(input_tensors.size(), kNumInputTensorsWithAnchors);
       [MPPMetalUtil blitMetalBufferTo:gpu_data_->raw_anchors_buffer
                                  from:input_tensors[2]
-                             blocking:true
+                             blocking:false
                         commandBuffer:[gpu_helper_ commandBuffer]];
     }
     anchors_init_ = true;
   }
 
   // Run shaders.
-  {
-    id<MTLCommandBuffer> command_buffer = [gpu_helper_ commandBuffer];
-    command_buffer.label = @"TfLiteDecodeBoxes";
-    id<MTLComputeCommandEncoder> decode_command =
-        [command_buffer computeCommandEncoder];
-    [decode_command setComputePipelineState:gpu_data_->decode_program];
-    [decode_command setBuffer:gpu_data_->decoded_boxes_buffer
-                       offset:0
-                      atIndex:0];
-    [decode_command setBuffer:gpu_data_->raw_boxes_buffer offset:0 atIndex:1];
-    [decode_command setBuffer:gpu_data_->raw_anchors_buffer offset:0 atIndex:2];
-    MTLSize decode_threads_per_group = MTLSizeMake(1, 1, 1);
-    MTLSize decode_threadgroups = MTLSizeMake(num_boxes_, 1, 1);
-    [decode_command dispatchThreadgroups:decode_threadgroups
-                   threadsPerThreadgroup:decode_threads_per_group];
-    [decode_command endEncoding];
-    [command_buffer commit];
-    [command_buffer waitUntilCompleted];
-  }
-  {
-    id<MTLCommandBuffer> command_buffer = [gpu_helper_ commandBuffer];
-    command_buffer.label = @"TfLiteScoreBoxes";
-    id<MTLComputeCommandEncoder> score_command =
-        [command_buffer computeCommandEncoder];
-    [score_command setComputePipelineState:gpu_data_->score_program];
-    [score_command setBuffer:gpu_data_->scored_boxes_buffer offset:0 atIndex:0];
-    [score_command setBuffer:gpu_data_->raw_scores_buffer offset:0 atIndex:1];
-    MTLSize score_threads_per_group = MTLSizeMake(1, num_classes_, 1);
-    MTLSize score_threadgroups = MTLSizeMake(num_boxes_, 1, 1);
-    [score_command dispatchThreadgroups:score_threadgroups
+  id<MTLCommandBuffer> command_buffer = [gpu_helper_ commandBuffer];
+  command_buffer.label = @"TfLiteDecodeAndScoreBoxes";
+  id<MTLComputeCommandEncoder> command_encoder =
+      [command_buffer computeCommandEncoder];
+  [command_encoder setComputePipelineState:gpu_data_->decode_program];
+  [command_encoder setBuffer:gpu_data_->decoded_boxes_buffer
+                      offset:0
+                     atIndex:0];
+  [command_encoder setBuffer:gpu_data_->raw_boxes_buffer offset:0 atIndex:1];
+  [command_encoder setBuffer:gpu_data_->raw_anchors_buffer offset:0 atIndex:2];
+  MTLSize decode_threads_per_group = MTLSizeMake(1, 1, 1);
+  MTLSize decode_threadgroups = MTLSizeMake(num_boxes_, 1, 1);
+  [command_encoder dispatchThreadgroups:decode_threadgroups
+                  threadsPerThreadgroup:decode_threads_per_group];
+
+  [command_encoder setComputePipelineState:gpu_data_->score_program];
+  [command_encoder setBuffer:gpu_data_->scored_boxes_buffer offset:0 atIndex:0];
+  [command_encoder setBuffer:gpu_data_->raw_scores_buffer offset:0 atIndex:1];
+  MTLSize score_threads_per_group = MTLSizeMake(1, num_classes_, 1);
+  MTLSize score_threadgroups = MTLSizeMake(num_boxes_, 1, 1);
+  [command_encoder dispatchThreadgroups:score_threadgroups
                   threadsPerThreadgroup:score_threads_per_group];
-    [score_command endEncoding];
-    [command_buffer commit];
-    [command_buffer waitUntilCompleted];
-  }
+  [command_encoder endEncoding];
+  [MPPMetalUtil commitCommandBufferAndWait:command_buffer];
 
   // Copy decoded boxes from GPU to CPU.
   std::vector<float> boxes(num_boxes_ * num_coords_);
@@ -562,11 +552,11 @@ REGISTER_CALCULATOR(TfLiteTensorsToDetectionsCalculator);
 
 ::mediapipe::Status TfLiteTensorsToDetectionsCalculator::Close(
     CalculatorContext* cc) {
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
   gpu_helper_.RunInGlContext([this] { gpu_data_.reset(); });
-#elif defined(__APPLE__) && !TARGET_OS_OSX  // iOS
+#elif defined(MEDIAPIPE_IOS)
   gpu_data_.reset();
-#endif                                      //  !MEDIAPIPE_DISABLE_GPU
+#endif
 
   return ::mediapipe::OkStatus();
 }
@@ -715,7 +705,7 @@ Detection TfLiteTensorsToDetectionsCalculator::ConvertToDetection(
 
 ::mediapipe::Status TfLiteTensorsToDetectionsCalculator::GpuInit(
     CalculatorContext* cc) {
-#if !defined(MEDIAPIPE_DISABLE_GPU) && !defined(__APPLE__)
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
   MP_RETURN_IF_ERROR(gpu_helper_.RunInGlContext([this]()
                                                     -> ::mediapipe::Status {
     gpu_data_ = absl::make_unique<GPUData>();
@@ -928,8 +918,7 @@ void main() {
     return ::mediapipe::OkStatus();
   }));
 
-#elif defined(__APPLE__) && !TARGET_OS_OSX  // iOS
-  // TODO consolidate Metal and OpenGL shaders via vulkan.
+#elif defined(MEDIAPIPE_IOS)
 
   gpu_data_ = absl::make_unique<GPUData>();
   id<MTLDevice> device = gpu_helper_.mtlDevice;
@@ -1159,7 +1148,7 @@ kernel void scoreKernel(
     CHECK_LT(num_classes_, max_wg_size) << "# classes must be <" << max_wg_size;
   }
 
-#endif  // __ANDROID__ or iOS
+#endif  // !defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
 
   return ::mediapipe::OkStatus();
 }

@@ -21,7 +21,8 @@ import sys
 
 from absl import app
 from absl import flags
-import tensorflow as tf
+import six
+import tensorflow.compat.v1 as tf
 from mediapipe.util.sequence import media_sequence as ms
 
 FLAGS = flags.FLAGS
@@ -53,8 +54,8 @@ def main(argv):
       flags.FLAGS.clip_start_time_sec * SECONDS_TO_MICROSECONDS, metadata)
   ms.set_clip_end_timestamp(
       flags.FLAGS.clip_end_time_sec * SECONDS_TO_MICROSECONDS, metadata)
-  with open('/tmp/mediapipe/metadata.tfrecord', 'wb') as writer:
-    writer.write(metadata.SerializeToString())
+  with open('/tmp/mediapipe/metadata.pb', 'wb') as writer:
+    writer.write(six.ensure_binary(metadata.SerializeToString()))
 
 
 if __name__ == '__main__':

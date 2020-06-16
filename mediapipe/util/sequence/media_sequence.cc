@@ -217,6 +217,18 @@ float TimestampsToRate(int64 first_timestamp, int64 second_timestamp) {
             sequence);
       }
     }
+    if (GetPointSize(prefix, *sequence) > 0) {
+      std::string x_key = merge_prefix(prefix, kRegionPointXKey);
+      auto* region_feature_list = MutableFeatureList(x_key, sequence);
+      RET_CHECK_EQ(num_bboxes, region_feature_list->feature_size())
+          << "Expected number of BBox timestamps and boxes to match.";
+      ClearBBoxNumRegions(prefix, sequence);
+      for (int i = 0; i < num_bboxes; ++i) {
+        AddBBoxNumRegions(
+            prefix, region_feature_list->feature(i).float_list().value_size(),
+            sequence);
+      }
+    }
     // Collect which timestamps currently match to which indices in timestamps.
     // skip empty timestamps.
     // Requires sorted indices.
@@ -274,10 +286,11 @@ float TimestampsToRate(int64 first_timestamp, int64 second_timestamp) {
     // overwriting with modified values.
     if (!GetUnmodifiedBBoxTimestampSize(prefix, *sequence)) {
       for (int i = 0; i < num_frames; ++i) {
-        if (bbox_index_if_annotated[i] >= 0 &&
-            GetBBoxIsAnnotatedAt(prefix, *sequence, i)) {
-          AddUnmodifiedBBoxTimestamp(
-              prefix, box_timestamps[bbox_index_if_annotated[i]], sequence);
+        const int bbox_index = bbox_index_if_annotated[i];
+        if (bbox_index >= 0 &&
+            GetBBoxIsAnnotatedAt(prefix, *sequence, bbox_index)) {
+          AddUnmodifiedBBoxTimestamp(prefix, box_timestamps[bbox_index],
+                                     sequence);
         }
       }
     }

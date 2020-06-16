@@ -27,7 +27,9 @@ cc_library(
         "//mediapipe/framework/port:file_helpers",
         "//mediapipe/framework/port:map_util",
         "//mediapipe/framework/port:parse_text_proto",
+        "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/port:status",
+        "//mediapipe/framework/port:statusor",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -51,7 +53,7 @@ cc_library(
 
 # Linux only.
 # Must have a GPU with EGL support:
-# ex: sudo aptitude install mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev
+# ex: sudo apt-get install mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev
 # (or similar nvidia/amd equivalent)
 cc_library(
     name = "demo_run_graph_main_gpu",
